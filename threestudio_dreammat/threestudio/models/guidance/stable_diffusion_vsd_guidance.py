@@ -37,8 +37,8 @@ class ToWeightsDType(nn.Module):
 class StableDiffusionVSDGuidance(BaseModule):
     @dataclass
     class Config(BaseModule.Config):
-        pretrained_model_name_or_path: str = "stabilityai/stable-diffusion-2-1-base"
-        pretrained_model_name_or_path_lora: str = "stabilityai/stable-diffusion-2-1"
+        pretrained_model_name_or_path: str = "Manojb/stable-diffusion-2-1-base"
+        pretrained_model_name_or_path_lora: str = "Manojb/stable-diffusion-2-1"
         pretrained_model_cache_dir : str= "../../model/SD"
         enable_memory_efficient_attention: bool = False
         enable_sequential_cpu_offload: bool = False

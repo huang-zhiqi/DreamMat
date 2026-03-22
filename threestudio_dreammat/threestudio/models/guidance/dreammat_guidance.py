@@ -47,7 +47,7 @@ class StableDiffusionLightGuidance(BaseObject):
         width:int=512
         height:int=512
         cache_dir: str = None
-        pretrained_model_name_or_path: str = "stabilityai/stable-diffusion-2-1-base"
+        pretrained_model_name_or_path: str = "Manojb/stable-diffusion-2-1-base"
         controlnet_path:str = None
         enable_memory_efficient_attention: bool = False
         enable_sequential_cpu_offload: bool = False

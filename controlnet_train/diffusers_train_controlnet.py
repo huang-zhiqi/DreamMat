@@ -209,7 +209,7 @@ def parse_args(input_args=None):
         )
     parser.add_argument("--pretrained_model_name_or_path",
         type=str,
-        default="stabilityai/stable-diffusion-2-1-base",
+        default="Manojb/stable-diffusion-2-1-base",
         help="Path to pretrained model or model identifier from huggingface.co/models.",
     )
 

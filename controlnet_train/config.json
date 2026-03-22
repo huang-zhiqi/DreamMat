@@ -1,5 +1,5 @@
 {
-    "pretrained_model_name_or_path":"stabilityai/stable-diffusion-2-1-base",
+    "pretrained_model_name_or_path":"Manojb/stable-diffusion-2-1-base",
     "use_cfg":false,
     "train_data_dir": "dataset_example/training_data",
     "prompt_file_path": "dataset_example/prompts/prompts.json",
