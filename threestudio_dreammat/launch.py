@@ -235,8 +235,66 @@ if __name__ == "__main__":
         action="store_true",
         help="whether to enable dynamic type checking",
     )
+    parser.add_argument(
+        "--batch_tsv",
+        default=None,
+        help="path to TSV file for batch export mode",
+    )
+    parser.add_argument(
+        "--caption_field",
+        default="caption_long",
+        help="caption column to use from TSV in batch export mode",
+    )
+    parser.add_argument(
+        "--max_samples",
+        type=int,
+        default=-1,
+        help="maximum number of TSV rows to process in batch export mode (-1 = all)",
+    )
+    parser.add_argument(
+        "--result_tsv",
+        default="generated_manifest.tsv",
+        help="output TSV path for batch export manifest (relative to batch root if not absolute)",
+    )
+    parser.add_argument(
+        "--gpu_ids",
+        default=None,
+        help="comma-separated GPU IDs for batch export scheduling, e.g. 0,1,2,3",
+    )
+    parser.add_argument(
+        "--num_gpus",
+        type=int,
+        default=0,
+        help="number of GPUs to use from --gpu_ids in batch export mode (0 = all)",
+    )
+    parser.add_argument(
+        "--workers_per_gpu",
+        default="1",
+        help="number of parallel workers per GPU in batch export mode",
+    )
+    parser.add_argument(
+        "--keep_intermediate",
+        action="store_true",
+        help="keep per-sample DreamMat run directories in batch export mode",
+    )
+    parser.add_argument(
+        "--batch_work_dir_name",
+        default="__runs__",
+        help="subdirectory under the batch root used for per-sample DreamMat runs",
+    )
+    parser.add_argument(
+        "--batch_textures_dir_name",
+        default="textures",
+        help="subdirectory under the batch root used for normalized exported assets",
+    )
 
     args, extras = parser.parse_known_args()
+
+    if args.batch_tsv:
+        from batch_export import maybe_run_batch
+
+        if maybe_run_batch(args, extras):
+            sys.exit(0)
 
     if args.gradio:
         # FIXME: no effect, stdout is not captured

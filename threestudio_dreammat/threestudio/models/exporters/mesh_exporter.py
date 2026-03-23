@@ -41,16 +41,38 @@ class MeshExporter(Exporter):
         self.ctx = NVDiffRasterizerContext(self.cfg.context_type, self.device)
 
     def __call__(self) -> List[ExporterOutput]:
-        mesh: Mesh = self.geometry.isosurface()
+        if hasattr(self.geometry, "get_export_mesh"):
+            mesh: Mesh = self.geometry.get_export_mesh()
+        else:
+            mesh: Mesh = self.geometry.isosurface()
+        sample_mesh: Mesh = self.geometry.isosurface()
 
         if self.cfg.fmt == "obj-mtl":
-            return self.export_obj_with_mtl(mesh)
+            return self.export_obj_with_mtl(mesh, sample_mesh)
         elif self.cfg.fmt == "obj":
-            return self.export_obj(mesh)
+            return self.export_obj(mesh, sample_mesh)
         else:
             raise ValueError(f"Unsupported mesh export format: {self.cfg.fmt}")
 
-    def export_obj_with_mtl(self, mesh: Mesh) -> List[ExporterOutput]:
+    def prepare_uv_layout(self, mesh: Mesh, sample_mesh: Mesh) -> Mesh:
+        if not self.cfg.save_uv:
+            return mesh
+        # Keep UV unwrapping in the internal training coordinate system so baking
+        # remains consistent with single-run exports, then reuse those UVs on the
+        # export mesh coordinates.
+        unwrap_mesh = sample_mesh
+        unwrap_mesh.unwrap_uv(
+            self.cfg.xatlas_chart_options, self.cfg.xatlas_pack_options
+        )
+        return Mesh(
+            v_pos=mesh.v_pos,
+            t_pos_idx=mesh.t_pos_idx,
+            v_nrm=mesh.v_nrm,
+            v_tex=unwrap_mesh.v_tex,
+            t_tex_idx=unwrap_mesh.t_tex_idx,
+        )
+
+    def export_obj_with_mtl(self, mesh: Mesh, sample_mesh: Mesh) -> List[ExporterOutput]:
         params = {
             "mesh": mesh,
             "save_mat": True,
@@ -66,8 +88,7 @@ class MeshExporter(Exporter):
             "map_format": self.cfg.texture_format,
         }
 
-        if self.cfg.save_uv:
-            mesh.unwrap_uv(self.cfg.xatlas_chart_options, self.cfg.xatlas_pack_options)
+        mesh = self.prepare_uv_layout(mesh, sample_mesh)
 
         if self.cfg.save_texture:
             threestudio.info("Exporting textures ...")
@@ -105,7 +126,7 @@ class MeshExporter(Exporter):
 
             # Interpolate world space position
             gb_pos, _ = self.ctx.interpolate_one(
-                mesh.v_pos, rast[None, ...], mesh.t_pos_idx
+                sample_mesh.v_pos, rast[None, ...], sample_mesh.t_pos_idx
             )
             gb_pos = gb_pos[0]
 
@@ -136,7 +157,7 @@ class MeshExporter(Exporter):
             )
         ]
 
-    def export_obj(self, mesh: Mesh) -> List[ExporterOutput]:
+    def export_obj(self, mesh: Mesh, sample_mesh: Mesh) -> List[ExporterOutput]:
         params = {
             "mesh": mesh,
             "save_mat": False,
@@ -152,13 +173,12 @@ class MeshExporter(Exporter):
             "map_format": self.cfg.texture_format,
         }
 
-        if self.cfg.save_uv:
-            mesh.unwrap_uv(self.cfg.xatlas_chart_options, self.cfg.xatlas_pack_options)
+        mesh = self.prepare_uv_layout(mesh, sample_mesh)
 
         if self.cfg.save_texture:
             threestudio.info("Exporting textures ...")
-            geo_out = self.geometry.export(points=mesh.v_pos)
-            mat_out = self.material.export(points=mesh.v_pos, **geo_out)
+            geo_out = self.geometry.export(points=sample_mesh.v_pos)
+            mat_out = self.material.export(points=sample_mesh.v_pos, **geo_out)
 
             if "albedo" in mat_out:
                 mesh.set_vertex_color(mat_out["albedo"])

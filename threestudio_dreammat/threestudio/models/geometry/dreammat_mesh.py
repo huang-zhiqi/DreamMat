@@ -119,6 +119,7 @@ class DreamMatMesh(BaseExplicitGeometry):
         shape_init_params: Optional[Any] = None
         shape_init_mesh_up: str = "+z"
         shape_init_mesh_front: str = "+x"
+        export_coordinate_mode: str = "internal"
 
     cfg: Config
 
@@ -159,6 +160,16 @@ class DreamMatMesh(BaseExplicitGeometry):
             
             if not isinstance(mesh.visual, trimesh.visual.TextureVisuals):
                 mesh=mesh.unwrap()
+
+            if self.cfg.export_coordinate_mode == "texgaussian":
+                # Keep a TexGaussian-style normalized copy for export-only coordinates.
+                export_mesh_vertices = mesh.vertices.copy()
+                export_mesh_vertices = (
+                    export_mesh_vertices - mesh.bounding_box.centroid
+                )
+                export_mesh_radius = np.linalg.norm(export_mesh_vertices, axis=1).max()
+                export_mesh_vertices = export_mesh_vertices / export_mesh_radius
+                export_mesh_normals = np.ascontiguousarray(mesh.vertex_normals)
 
             # move to center
             centroid = mesh.vertices.mean(0)
@@ -220,6 +231,15 @@ class DreamMatMesh(BaseExplicitGeometry):
                 "t_buffer",
                 t_pos_idx,
             )
+            if self.cfg.export_coordinate_mode == "texgaussian":
+                self.register_buffer(
+                    "export_v_buffer",
+                    torch.tensor(export_mesh_vertices, dtype=torch.float32).to(self.device),
+                )
+                self.register_buffer(
+                    "export_vnrm_buffer",
+                    torch.tensor(export_mesh_normals, dtype=torch.float32).to(self.device),
+                )
 
         else:
             raise ValueError(
@@ -235,6 +255,26 @@ class DreamMatMesh(BaseExplicitGeometry):
             return self.mesh
         else:
             raise ValueError(f"custom mesh is not initialized")
+
+    def get_export_mesh(self) -> Mesh:
+        if self.cfg.export_coordinate_mode == "internal":
+            return self.isosurface()
+        if self.cfg.export_coordinate_mode == "texgaussian":
+            if not hasattr(self, "export_v_buffer"):
+                raise ValueError(
+                    "TexGaussian export coordinates are not prepared. "
+                    "Set system.geometry.export_coordinate_mode=texgaussian when running export."
+                )
+            return Mesh(
+                v_pos=self.export_v_buffer,
+                t_pos_idx=self.t_buffer,
+                v_nrm=self.export_vnrm_buffer,
+                v_tex=self.vtex_buffer,
+                t_tex_idx=self.t_buffer,
+            )
+        raise ValueError(
+            f"Unknown export coordinate mode: {self.cfg.export_coordinate_mode}"
+        )
 
     def forward(
         self, points: Float[Tensor, "*N Di"], output_normal: bool = False

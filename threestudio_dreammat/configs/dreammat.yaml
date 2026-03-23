@@ -98,6 +98,9 @@ system:
   renderer:
     context_type: cuda
 
+  exporter:
+    texture_size: 1024
+
   loggers:
     wandb:
       enable: false
