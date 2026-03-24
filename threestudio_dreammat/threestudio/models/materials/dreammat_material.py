@@ -363,6 +363,7 @@ class DreamMatMaterial(BaseMaterial):
 
         diffuse_sample_num: int = 512
         specular_sample_num: int = 256
+        raytracing_point_chunk_size: int = 4096
         geometry_type: str='schlick'
         random_azimuth: bool = True
 
@@ -615,7 +616,9 @@ class DreamMatMaterial(BaseMaterial):
             raise NotImplementedError
         return geometry
 
-    def shade_raytracing(self, pts, normals, view_dirs, env_id, metallic, roughness, albedo, is_train):
+    def _shade_raytracing_impl(
+        self, pts, normals, view_dirs, env_id, metallic, roughness, albedo, is_train
+    ):
         if(torch.isnan(roughness).any()==True):
             import ipdb
             ipdb.set_trace()
@@ -678,6 +681,42 @@ class DreamMatMaterial(BaseMaterial):
         outputs['diffuse_colors'] = get_activation("lin2srgb")(diffuse_colors.detach())
 
         return outputs
+
+    def shade_raytracing(self, pts, normals, view_dirs, env_id, metallic, roughness, albedo, is_train):
+        point_chunk_size = self.cfg.raytracing_point_chunk_size
+        point_num = pts.shape[0]
+        if point_chunk_size <= 0 or point_num <= point_chunk_size:
+            return self._shade_raytracing_impl(
+                pts, normals, view_dirs, env_id, metallic, roughness, albedo, is_train
+            )
+
+        chunk_outputs = {
+            "color": [],
+            "albedo": [],
+            "roughness": [],
+            "metalness": [],
+            "specular_lights": [],
+            "diffuse_lights": [],
+            "specular_colors": [],
+            "diffuse_colors": [],
+        }
+
+        for start in range(0, point_num, point_chunk_size):
+            end = min(start + point_chunk_size, point_num)
+            outputs = self._shade_raytracing_impl(
+                pts[start:end],
+                normals[start:end],
+                view_dirs[start:end],
+                env_id,
+                metallic[start:end],
+                roughness[start:end],
+                albedo[start:end],
+                is_train,
+            )
+            for key in chunk_outputs:
+                chunk_outputs[key].append(outputs[key])
+
+        return {key: torch.cat(values, dim=0) for key, values in chunk_outputs.items()}
 
     def shade_splitsum(self,normals, viewdirs, env_id, metallic, roughness, albedo, prefix_shape):
         v = viewdirs

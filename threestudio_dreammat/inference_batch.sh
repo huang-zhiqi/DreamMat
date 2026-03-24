@@ -28,6 +28,9 @@ export PATH=$PATH:/home/pubNAS3/zhiqi/Github/tools/blender-3.2.2-linux-x64
 export CPATH=/usr/local/cuda/include:$CONDA_PREFIX/targets/x86_64-linux/include
 export LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:/usr/lib64:$LIBRARY_PATH
 
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+
+
 # ================= 参数配置 =================
 
 CONFIG_PATH="configs/dreammat.yaml"

@@ -291,8 +291,8 @@ class RandomCameraIterableDataset(IterableDataset, Updateable):
             )
 
         lookat: Float[Tensor, "B 3"] = F.normalize(center - camera_positions, dim=-1)
-        right: Float[Tensor, "B 3"] = F.normalize(torch.cross(lookat, up), dim=-1)
-        up = F.normalize(torch.cross(right, lookat), dim=-1)
+        right: Float[Tensor, "B 3"] = F.normalize(torch.cross(lookat, up, dim=-1), dim=-1)
+        up = F.normalize(torch.cross(right, lookat, dim=-1), dim=-1)
         c2w3x4: Float[Tensor, "B 3 4"] = torch.cat(
             [torch.stack([right, up, -lookat], dim=-1), camera_positions[:, :, None]],
             dim=-1,
@@ -383,8 +383,8 @@ class FixCameraIterableDataset(IterableDataset, Updateable):
         fovy = fovy_deg * math.pi / 180
 
         lookat: Float[Tensor, "B 3"] = F.normalize(center - camera_positions, dim=-1)
-        right: Float[Tensor, "B 3"] = F.normalize(torch.cross(lookat, up), dim=-1)
-        up = F.normalize(torch.cross(right, lookat), dim=-1)
+        right: Float[Tensor, "B 3"] = F.normalize(torch.cross(lookat, up, dim=-1), dim=-1)
+        up = F.normalize(torch.cross(right, lookat, dim=-1), dim=-1)
         c2w3x4: Float[Tensor, "B 3 4"] = torch.cat(
             [torch.stack([right, up, -lookat], dim=-1), camera_positions[:, :, None]],
             dim=-1,
@@ -409,6 +409,27 @@ class FixCameraIterableDataset(IterableDataset, Updateable):
         # Importance note: the returned rays_d MUST be normalized!
         rays_o, rays_d = get_rays(directions, c2w, keepdim=True)
 
+        def saveimg(img,path):
+            from PIL import Image
+            import numpy as np
+            img=img.detach().reshape(self.height,self.width,3).cpu().numpy()
+            img=Image.fromarray((img*255).astype(np.uint8))
+            img.save(path)
+
+        triangle_count = int(self.mesh.t_pos_idx.shape[0])
+        if triangle_count <= 8:
+            normals = torch.full(
+                (self.height, self.width, 3),
+                0.5,
+                dtype=torch.float32,
+                device=rays_o.device,
+            )
+            normals[..., 2] = 1.0
+            depth = torch.zeros((self.height, self.width, 3), dtype=torch.float32, device=rays_o.device)
+            hit_mask = torch.zeros((self.height, self.width, 3), dtype=torch.float32, device=rays_o.device)
+            saveimg(normals, self.temp_image_save_dir+'/gt/normal'+str(view_id[0])+'.png')
+            return normals, depth, hit_mask
+
         ray_tracer = RayTracer(self.mesh.v_pos, self.mesh.t_pos_idx)
         inters, normals, depth = ray_tracer.trace(rays_o.reshape(-1,3), rays_d.reshape(-1,3))
         normals = F.normalize(normals, dim=-1)
@@ -423,14 +444,6 @@ class FixCameraIterableDataset(IterableDataset, Updateable):
                 assert torch.all(torch.isfinite(out)), "Output of xfm_vectors contains inf or NaN"
             return out
         
-        def saveimg(img,path):
-            from PIL import Image
-            import numpy as np
-            img=img.detach().reshape(self.height,self.width,3).cpu().numpy()
-            img=Image.fromarray((img*255).astype(np.uint8))
-            img.save(path)
-        
-
         normal_view  = xfm_vectors(normals[hit_mask].view(view_id.shape[0], normals[hit_mask].shape[0], normals[hit_mask].shape[1]), w2c.to(normals.device)).view(*normals[hit_mask].shape)
         normal_view = F.normalize(normal_view)
         normal_controlnet=0.5*(normal_view+1)
@@ -489,8 +502,8 @@ class FixCameraIterableDataset(IterableDataset, Updateable):
             center = center + center_perturb
             up: Float[Tensor, "B 128 3"] = torch.as_tensor([0, 0, 1], dtype=torch.float32)[None, :].repeat(self.batch_size, 1).expand(128, -1)
             lookat: Float[Tensor, "B 128 3"] = F.normalize(center - camera_positions, dim=-1)
-            right: Float[Tensor, "B 128 3"] = F.normalize(torch.cross(lookat, up), dim=-1)
-            up = F.normalize(torch.cross(right, lookat), dim=-1)
+            right: Float[Tensor, "B 128 3"] = F.normalize(torch.cross(lookat, up, dim=-1), dim=-1)
+            up = F.normalize(torch.cross(right, lookat, dim=-1), dim=-1)
             c2w3x4: Float[Tensor, "B 128 3 4"] = torch.cat(
                 [torch.stack([right, up, -lookat], dim=-1), camera_positions[:, :, None]],
                 dim=-1,
@@ -765,8 +778,8 @@ class FixCameraIterableDataset(IterableDataset, Updateable):
         fovy = fovy_deg * math.pi / 180
 
         lookat: Float[Tensor, "B 3"] = F.normalize(center - camera_positions, dim=-1)
-        right: Float[Tensor, "B 3"] = F.normalize(torch.cross(lookat, up), dim=-1)
-        up = F.normalize(torch.cross(right, lookat), dim=-1)
+        right: Float[Tensor, "B 3"] = F.normalize(torch.cross(lookat, up, dim=-1), dim=-1)
+        up = F.normalize(torch.cross(right, lookat, dim=-1), dim=-1)
         c2w3x4: Float[Tensor, "B 3 4"] = torch.cat(
             [torch.stack([right, up, -lookat], dim=-1), camera_positions[:, :, None]],
             dim=-1,
@@ -876,8 +889,8 @@ class RandomCameraDataset(Dataset):
         light_positions: Float[Tensor, "B 3"] = camera_positions
 
         lookat: Float[Tensor, "B 3"] = F.normalize(center - camera_positions, dim=-1)
-        right: Float[Tensor, "B 3"] = F.normalize(torch.cross(lookat, up), dim=-1)
-        up = F.normalize(torch.cross(right, lookat), dim=-1)
+        right: Float[Tensor, "B 3"] = F.normalize(torch.cross(lookat, up, dim=-1), dim=-1)
+        up = F.normalize(torch.cross(right, lookat, dim=-1), dim=-1)
         c2w3x4: Float[Tensor, "B 3 4"] = torch.cat(
             [torch.stack([right, up, -lookat], dim=-1), camera_positions[:, :, None]],
             dim=-1,
@@ -1001,4 +1014,3 @@ class RandomCameraDataModule(pl.LightningDataModule):
         return self.general_loader(
             self.test_dataset, batch_size=1, collate_fn=self.test_dataset.collate
         )
-

@@ -100,8 +100,17 @@ class RaytraceRender(Rasterizer):
         super().configure(geometry, material, background)
         self.ctx = NVDiffRasterizerContext(self.cfg.context_type, get_device())
         self.mesh = self.geometry.isosurface()
-        self.ray_tracer = RayTracer(self.mesh.v_pos, self.mesh.t_pos_idx)
-        self.material.set_raytracer(lambda o,d: self.trace(o,d))
+        triangle_count = int(self.mesh.t_pos_idx.shape[0])
+        if triangle_count > 8:
+            self.ray_tracer = RayTracer(self.mesh.v_pos, self.mesh.t_pos_idx)
+            self.material.set_raytracer(lambda o,d: self.trace(o,d))
+        else:
+            self.ray_tracer = None
+            if getattr(self.material.cfg, "use_raytracing", False):
+                threestudio.warn(
+                    f"Mesh has only {triangle_count} triangles; falling back to non-raytracing material shading."
+                )
+                self.material.cfg.use_raytracing = False
 
         self.change_type = 'gaussian'
         self.change_eps = 0.05
@@ -124,6 +133,26 @@ class RaytraceRender(Rasterizer):
         rast, _ = self.ctx.rasterize(v_pos_clip, self.mesh.t_pos_idx, (height, width))
         mask = rast[..., 3:] > 0
         selector = mask[..., 0].reshape(batch_size,width*height)
+        if not mask.any():
+            background = torch.tensor([0.5, 0.5, 1.0], device=self.device).reshape(1, 1, 1, 3)
+            color = torch.ones((batch_size, height, width, 3), device=self.device, requires_grad=True)
+            zero_scalar = torch.zeros((batch_size, height, width, 1), device=self.device)
+            one_scalar = torch.ones((batch_size, height, width, 1), device=self.device)
+            white_rgb = torch.ones((batch_size, height, width, 3), device=self.device)
+            return {
+                "comp_rgb": color,
+                "opacity": zero_scalar,
+                "comp_depth": zero_scalar,
+                "comp_normal": background.repeat(batch_size, height, width, 1),
+                "albedo": white_rgb,
+                "metalness": one_scalar,
+                "roughness": one_scalar,
+                "specular_light": white_rgb,
+                "diffuse_light": white_rgb,
+                "specular_color": white_rgb,
+                "diffuse_color": white_rgb,
+                "loss_mat_reg": torch.zeros((), device=self.device),
+            }
         mask_aa = self.ctx.antialias(mask.float(), rast, v_pos_clip, self.mesh.t_pos_idx)
 
         min_val=0.3

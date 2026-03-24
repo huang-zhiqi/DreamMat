@@ -91,6 +91,7 @@ system:
     use_raytracing: true
     diffuse_sample_num: 200
     specular_sample_num: 128
+    raytracing_point_chunk_size: 4096
 
   background_type: "solid-color-background" #"neural-environment-map-background"
 
